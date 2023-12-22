@@ -1,6 +1,6 @@
 FROM python:3.11
 
-WORKDIR /movie-api-project
+WORKDIR /vqa_server
 
 COPY '/requirements.txt' .
 

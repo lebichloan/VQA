@@ -1,39 +1,47 @@
 from flask import Flask, request, jsonify
-from transformers import ViltProcessor, ViltForQuestionAnswering
-from PIL import Image
-import requests
+from utils.model import handle_question_answering
+from utils.ServerResponse import ServerResponse
 
 app = Flask(__name__)
+import json
 
-# Load the Vilt model and processor
-processor = ViltProcessor.from_pretrained("dandelin/vilt-b32-finetuned-vqa")
-model = ViltForQuestionAnswering.from_pretrained("dandelin/vilt-b32-finetuned-vqa")
-
+# home route
 @app.route('/')
-def index():
-   print('Wellcome to VQA')
+def home():
+    strHome = "Welcome VQA Home!"
+    return strHome
 
-@app.route('/predict', methods=['POST'])
+
+@app.route('/predict_vqa', methods=['POST'])
 def predict():
     try:
-        data = request.get_json()
-        image_url = data.get('imageUrl')
-        question = data.get('question')
+        # Get image
+        if 'image' not in request.files or request.files['image'].filename == '':
+            raise ValueError('Image invalid!')
 
-        # Load the image from URL
-        image = Image.open(requests.get(image_url, stream=True).raw)
+        image_data = request.files['image'].read()
 
-        # Prepare inputs
-        encoding = processor(image, question, return_tensors="pt")
+        # Get question
+        data_question = request.form.get('data')
 
-        # Perform inference
-        outputs = model(**encoding)
-        idx = outputs.logits.argmax(-1).item()
-        predicted_answer = model.config.id2label[idx]
+        if not data_question:
+            raise ValueError('Question invalid!')
 
-        return jsonify({'predictedAnswer': predicted_answer})
-    except Exception as e:
-        return jsonify({'error': str(e)})
+        question = json.loads(data_question).get('question')
+
+        if question is None or question == '':
+            raise ValueError('Question invalid!')
+
+        # result
+        result = handle_question_answering(image_data, question)
+
+        response = ServerResponse('success', {'answer': result})
+        return jsonify(response.__dict__), 200
+
+    except ValueError as e:
+        error_type = e.args[0].split()[0].lower()
+        response = ServerResponse('error', {error_type: e.args[0]})
+        return jsonify(response.__dict__), 400
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug = True)
